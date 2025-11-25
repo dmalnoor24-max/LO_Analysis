@@ -105,17 +105,17 @@ async function loadDefaultData() {
         const response = await fetch(defaultJsonUrl);
         const jsonData = await response.json();
 
-        // Handle case where file contains a single object instead of an array
         const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
 
-        // Load dashboard with the GitHub data
-        processUploadedData(dataArray);
+        rawData = dataArray;
+
+        populateFilters(rawData);
+        drawAll();
 
     } catch (error) {
         console.error("Error loading default JSON:", error);
     }
 }
-
 
 
 // ---------- SAMPLE DATA ----------
@@ -151,7 +151,7 @@ let DEFAULT_DATA = [
   }
 ];
 
-let rawData = JSON.parse(JSON.stringify(dataArray));
+let rawData = JSON.parse(JSON.stringify(DEFAULT_DATA));
 
 // ---------- utilities ----------
 function toISODate(s){
@@ -403,8 +403,8 @@ document.getElementById('fileInput').addEventListener('change', function(e){
 // init
 // Call this when the page loads
 window.onload = loadDefaultData;
-populateFilters(rawData);
-drawAll();
+// populateFilters(rawData);
+// drawAll();
 
 </script>
 </body>
