@@ -192,7 +192,32 @@
   ];
 
   function findKeyLike(sampleKeys, keywords){ const low=keywords.map(k=>k.toLowerCase()); return sampleKeys.find(k=> low.some(w=> k.toLowerCase().includes(w) )) || null; }
-  function buildFieldMap(dataset){ const sample = dataset.find(Boolean) || {}; const sampleKeys = Object.keys(sample); const indicatorMap = {}; INDICATOR_LABELS.forEach(lbl=>{ const words = lbl.split(' ').slice(0,2).map(s=>s.replace(/[^a-zA-Z]/g,'')); indicatorMap[lbl] = findKeyLike(sampleKeys, [lbl.toLowerCase(), words.join(' '), words[0]]); }); const domainMap={}; DOMAIN_FIELDS.forEach(d=>{ domainMap[d] = sampleKeys.find(k=> k.toLowerCase().replace(/\s+/g,'').includes(d.toLowerCase().replace(/\s+/g,''))) || null; }); const overallKey = sampleKeys.find(k=>k.toLowerCase().replace(/\s+/g,'').includes('overalleffectiveness')) || 'OVERALL EFFECTIVENESS'; return {indicatorMap, domainMap, overallKey}; }
+  function buildFieldMap(dataset){
+  const INDICATOR_FIELD_MAP = {
+    "Managing conducive learning environment": "1. Managing conducive learning environment - JUSTIFICATION",
+    "Active Learning": "2. Active Learning - JUSTIFICATION",
+    "Technology Utilisation": "3. Technology and resources utilization: JUSTIFICATION",
+    "Effective Assessment": "4. Effective Assessment:  JUSTIFICATION",
+    "Differentiation": "5. Differentiation:  JUSTIFICATION",
+    "Feedback": "6. Timely and constructive feedback to students of varying needs -  JUSTIFICATION",
+    "Challenge": "7. Provides Challenge for all students - JUSTIFICATION",
+    "Progress": "8. Progress in lessons and learning skills: JUSTIFICATION",
+    "Student Self-Confidence": "9. Students show self-confidence, and the ability to seize opportunities, leadership, and initiative demonstrated  - JUSTIFICATION",
+    "Classroom Management": "10. Class Management: - JUSTIFICATION"
+  };
+
+  const indicatorMap = {};
+  INDICATOR_LABELS.forEach(lbl => { indicatorMap[lbl] = INDICATOR_FIELD_MAP[lbl] || null; });
+
+  const domainMap = {
+    "TEACHING LEARNING and ASSESSMENT": "TEACHING LEARNING and ASSESSMENT",
+    "ACADEMIC ACHIEVEMENT": "ACADEMIC ACHIEVEMENT",
+    "PERSONAL DEVELOPMENT AND WELL-BEING": "PERSONAL DEVELOPMENT AND WELL-BEING"
+  };
+
+  const overallKey = "OVERALL EFFECTIVENESS";
+  return { indicatorMap, domainMap, overallKey };
+} }
 
   // ---------- Filters ----------
   function populateFilters(data){
@@ -382,5 +407,27 @@
 
   window.onload = loadDefaultData;
 </script>
+
+
+<!-- TEACHER DRILLDOWN UI ADDED -->
+<div id="teacherDetails" class="panel" style="display:none; padding:20px;">
+  <button id="btnBack" style="margin-bottom:12px; background:#64748b; color:white; padding:6px 10px; border-radius:6px; border:none; cursor:pointer;">← Back</button>
+
+  <h2 id="tdTeacherName" style="margin-top:0"></h2>
+
+  <h3>Lesson Information</h3>
+  <table id="tdLessonInfo" style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+    <tbody></tbody>
+  </table>
+
+  <h3>Ratings & Justifications for 10 Indicators</h3>
+  <div id="tdIndicators"></div>
+
+  <h3>Positive Comments</h3>
+  <p id="tdPositive"></p>
+
+  <h3>Areas for Improvement</h3>
+  <p id="tdImprovement"></p>
+</div>
 </body>
 </html>
