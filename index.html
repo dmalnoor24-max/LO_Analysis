@@ -94,318 +94,306 @@
   </div>
 
 <script>
-
   // URL of your GitHub-hosted JSON file
- const defaultJsonUrl =  "https://raw.githubusercontent.com/dmalnoor24-max/LO_Analysis/refs/heads/main/lesson_data.json";
-  //const defaultJsonUrl =  "lesson_data.json";
- 
+  const defaultJsonUrl =
+    "https://raw.githubusercontent.com/dmalnoor24-max/LO_Analysis/refs/heads/main/lesson_data.json";
 
-async function loadDefaultData() {
+  // ---------- FALLBACK SAMPLE DATA ----------
+  let DEFAULT_DATA = [
+    {
+      "Timestamp": "10/30/2025 9:44:39",
+      "Email Address": "qa@alnoor.com.bh",
+      "Date of Observation": "10/30/2025",
+      "Your Name": "Babar Majeed Awan",
+      "Section": "BMS",
+      "Teacher's Full Name": "Suhaiba",
+      "Subject": "HISTORY",
+      "GRADE": "GRADE 7",
+      "DIVISION": "M",
+      "Period": 3,
+      "TOPIC and LEARNING OBJECTIVE": "Revision Worksheet checking with the help of teacher.",
+      "1. Managing conducive learning environment - RATING": 3,
+      "2. Active Learning - RATING": 4,
+      "3. Technology and resources utilization: - RATING": 4,
+      "4. Effective Assessment: - RATING": 3,
+      "5. Differentiation - RATING": 3,
+      "6. Timely and constructive feedback to students of varying needs - RATING": 3,
+      "7. Provides Challenge for all students - RATING": 4,
+      "8. Progress in lessons and learning skills: - RATING": 4,
+      "9. Students show self-confidence, and the ability to seize opportunities, leadership, and initiative demonstrated - RATING": 3,
+      "10. Class Management: - RATING": 4,
+      "TEACHING LEARNING and ASSESSMENT": 4,
+      "ACADEMIC ACHIEVEMENT": 4,
+      "PERSONAL DEVELOPMENT AND WELL-BEING": 3,
+      "OVERALL EFFECTIVENESS": 4
+    }
+  ];
+
+  let rawData = []; // will be filled by GitHub JSON
+
+  // ---------- UTILITIES ----------
+  function toISODate(s) {
+    if (!s) return null;
+    const d = new Date(s);
+    if (!isNaN(d)) return d.toISOString().slice(0, 10);
+    const parts = s.split(/[\/\-\s:]+/).filter(Boolean);
+    if (parts.length >= 3) {
+      if (parts[0].length === 4)
+        return parts[0] + "-" + parts[1].padStart(2, "0") + "-" + parts[2].padStart(2, "0");
+      let mm = parts[0], dd = parts[1], yy = parts[2];
+      if (parseInt(mm) > 12) { mm = parts[1]; dd = parts[0]; }
+      return yy + "-" + String(mm).padStart(2, "0") + "-" + String(dd).padStart(2, "0");
+    }
+    return null;
+  }
+
+  function safeParseNum(v) {
+    if (v == null) return NaN;
+    if (typeof v === "number") return v;
+    const n = parseFloat(String(v).trim());
+    return isNaN(n) ? NaN : n;
+  }
+
+  // ---------- FIELD MAPPING ----------
+  const INDICATOR_LABELS = [
+    'Managing conducive learning environment',
+    'Active Learning',
+    'Technology Utilisation',
+    'Effective Assessment',
+    'Differentiation',
+    'Feedback',
+    'Challenge',
+    'Progress',
+    'Student Self-Confidence',
+    'Classroom Management'
+  ];
+
+  const DOMAIN_FIELDS = [
+    'TEACHING LEARNING and ASSESSMENT',
+    'ACADEMIC ACHIEVEMENT',
+    'PERSONAL DEVELOPMENT AND WELL-BEING'
+  ];
+
+  function findKeyLike(sampleKeys, keywords) {
+    const low = keywords.map(k => k.toLowerCase());
+    return sampleKeys.find(k => low.some(w => k.toLowerCase().includes(w))) || null;
+  }
+
+  function buildFieldMap(dataset) {
+    const sample = dataset.find(Boolean) || {};
+    const sampleKeys = Object.keys(sample);
+    const indicatorMap = {};
+    INDICATOR_LABELS.forEach(lbl => {
+      const words = lbl.split(' ').slice(0, 2).map(s => s.replace(/[^a-zA-Z]/g, ''));
+      indicatorMap[lbl] = findKeyLike(sampleKeys, [lbl.toLowerCase(), words.join(' '), words[0]]);
+    });
+    const domainMap = {};
+    DOMAIN_FIELDS.forEach(d => {
+      domainMap[d] = sampleKeys.find(k =>
+        k.toLowerCase().replace(/\s+/g, '').includes(d.toLowerCase().replace(/\s+/g, ''))
+      ) || null;
+    });
+    const overallKey =
+      sampleKeys.find(k => k.toLowerCase().replace(/\s+/g, '').includes('overalleffectiveness'))
+      || 'OVERALL EFFECTIVENESS';
+
+    return { indicatorMap, domainMap, overallKey };
+  }
+
+  // ---------- FILTERS ----------
+  function populateFilters(data) {
+    const sections = new Set(), grades = new Set(), subjects = new Set(), teachers = new Set();
+    data.forEach(d => {
+      if (d.Section) sections.add(d.Section);
+      if (d.GRADE) grades.add(d.GRADE);
+      if (d.Subject) subjects.add(d.Subject);
+      const t = d["Teacher's Full Name"] || d.Teacher || d['Your Name'];
+      if (t) teachers.add(t);
+    });
+
+    fillSelect("filterSection", [...sections].sort());
+    fillSelect("filterGrade", [...grades].sort());
+    fillSelect("filterSubject", [...subjects].sort());
+    fillSelect("filterTeacher", [...teachers].sort());
+  }
+
+  function fillSelect(id, values) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="__ALL__">All</option>';
+    values.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      sel.appendChild(opt);
+    });
+  }
+
+  function getFilteredData() {
+    const sec = filterSection.value;
+    const grade = filterGrade.value;
+    const subj = filterSubject.value;
+    const teacher = filterTeacher.value;
+    const from = dateFrom.value;
+    const to = dateTo.value;
+
+    return rawData.filter(r => {
+      if (sec !== "__ALL__" && r.Section !== sec) return false;
+      if (grade !== "__ALL__" && r.GRADE !== grade) return false;
+      if (subj !== "__ALL__" && r.Subject !== subj) return false;
+      const tname = r["Teacher's Full Name"] || r.Teacher || r['Your Name'] || "";
+      if (teacher !== "__ALL__" && tname !== teacher) return false;
+      const dt = toISODate(r["Date of Observation"] || r.Timestamp);
+      if (from && dt && dt < from) return false;
+      if (to && dt && dt > to) return false;
+      return true;
+    });
+  }
+
+  // ---------- COUNTING ----------
+  function zeroCounts() { return { 1: 0, 2: 0, 3: 0, 4: 0 }; }
+
+  function countRatingsForKey(data, key) {
+    const cnt = zeroCounts();
+    data.forEach(d => {
+      const v = safeParseNum(d[key]);
+      if ([1, 2, 3, 4].includes(v)) cnt[v]++;
+    });
+    return cnt;
+  }
+
+  function countsToArray(cnt) {
+    return [cnt[1], cnt[2], cnt[3], cnt[4]];
+  }
+
+  // ---------- DRAW ALL CHARTS ----------
+  function drawAll() {
+    const filtered = getFilteredData();
+    const fmap = buildFieldMap(rawData);
+    const overallKey = fmap.overallKey;
+
+    // I) Overall Effectiveness
+    const overallCounts = countRatingsForKey(filtered, overallKey);
+    Plotly.react("chartOverall", [{
+      x: ['OUTSTANDING (1)', 'GOOD (2)', 'SATISFACTORY (3)', 'INADEQUATE (4)'],
+      y: countsToArray(overallCounts),
+      type: 'bar',
+      marker: { color: ['#10b981', '#60a5fa', '#f59e0b', '#ef4444'] },
+      text: countsToArray(overallCounts),
+      textposition: 'outside'
+    }], {
+      title: "Overall Effectiveness — lesson counts",
+      margin: { t: 40 },
+      yaxis: { title: "Count" }
+    });
+
+    // II) Section-wise Stacked
+    const sections = [...new Set(filtered.map(d => d.Section || "Unknown"))].sort();
+    const sectionSeries = [1, 2, 3, 4].map(r => ({
+      x: sections,
+      y: sections.map(s =>
+        filtered.filter(d => (d.Section || "Unknown") === s && safeParseNum(d[overallKey]) === r).length
+      ),
+      name: `Rating ${r}`,
+      type: 'bar'
+    }));
+    Plotly.react("chartSection", sectionSeries, {
+      barmode: "stack",
+      title: "Section-wise Overall Effectiveness (stacked)",
+      margin: { t: 40 }
+    });
+
+    // III) Domain counts
+    const domainKeys = DOMAIN_FIELDS.map(d => fmap.domainMap[d] || d);
+    const domainSeries = [1, 2, 3, 4].map(r => ({
+      x: DOMAIN_FIELDS,
+      y: domainKeys.map(k => countRatingsForKey(filtered, k)[r]),
+      name: `Rating ${r}`,
+      type: 'bar'
+    }));
+    Plotly.react("chartDomainCounts", domainSeries, {
+      barmode: "group",
+      title: "Domain Rating Distribution",
+      margin: { t: 40 }
+    });
+
+    // IV) Radar chart (domain averages)
+    const domainAvgs = domainKeys.map(k => {
+      const arr = filtered.map(d => safeParseNum(d[k])).filter(x => !isNaN(x));
+      return arr.length ? arr.reduce((a, b) => a + b) / arr.length : 0;
+    });
+
+    Plotly.react("chartDomainRadar", [{
+      type: "scatterpolar",
+      r: [...domainAvgs, domainAvgs[0]],
+      theta: [...DOMAIN_FIELDS, DOMAIN_FIELDS[0]],
+      fill: "toself"
+    }], {
+      title: "Domain Average Rating (1 = best)",
+      margin: { t: 40 },
+      polar: { radialaxis: { range: [1, 4] } }
+    });
+
+    // V) Indicators
+    const indMap = fmap.indicatorMap;
+    const presentInd = INDICATOR_LABELS
+      .map(lbl => ({ label: lbl, key: indMap[lbl] }))
+      .filter(x => x.key);
+
+    const indSeries = [1, 2, 3, 4].map(r => ({
+      x: presentInd.map(p => p.label),
+      y: presentInd.map(p => countRatingsForKey(filtered, p.key)[r]),
+      name: `Rating ${r}`,
+      type: "bar"
+    }));
+
+    Plotly.react("chartIndicators", indSeries, {
+      barmode: "stack",
+      title: "Pedagogical Indicators — counts per rating",
+      margin: { t: 40, b: 140 }
+    });
+  }
+
+  // ---------- LOAD DEFAULT (GITHUB) DATA ----------
+  async function loadDefaultData() {
     try {
-        const response = await fetch(defaultJsonUrl);
-        const jsonData = await response.json();
+      const res = await fetch(defaultJsonUrl);
+      const json = await res.json();
 
-        const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+      rawData = Array.isArray(json) ? json : [json];
 
-        rawData = dataArray;
+      populateFilters(rawData);
+      drawAll();
+    } catch (e) {
+      console.error("Error loading GitHub JSON:", e);
+      // fallback
+      rawData = [...DEFAULT_DATA];
+      populateFilters(rawData);
+      drawAll();
+    }
+  }
 
+  // ---------- FILE UPLOAD ----------
+  fileInput.addEventListener("change", e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const parsed = JSON.parse(evt.target.result);
+        rawData = Array.isArray(parsed) ? parsed : [parsed];
         populateFilters(rawData);
         drawAll();
-
-    } catch (error) {
-        console.error("Error loading default JSON:", error);
-    }
-}
-
-
-// ---------- SAMPLE DATA ----------
-let DEFAULT_DATA = [
-  {
-    "Timestamp": "10/30/2025 9:44:39",
-    "Email Address": "qa@alnoor.com.bh",
-    "Date of Observation": "10/30/2025",
-    "Your Name": "Babar Majeed Awan",
-    "Section": "BMS",
-    "Teacher's Full Name": "Suhaiba",
-    "Subject": "HISTORY",
-    "GRADE": "GRADE 7",
-    "DIVISION": "M",
-    "Period": 3,
-    "TOPIC and LEARNING OBJECTIVE": "Revision Worksheet checking with the help of teacher.",
-    "1. Managing conducive learning environment - RATING": 3,
-    "2. Active Learning - RATING": 4,
-    "3. Technology and resources utilization: - RATING": 4,
-    "4. Effective Assessment: - RATING": 3,
-    "5. Differentiation - RATING": 3,
-    "6. Timely and constructive feedback to students of varying needs - RATING": 3,
-    "7. Provides Challenge for all students - RATING": 4,
-    "8. Progress in lessons and learning skills: - RATING": 4,
-    "9. Students show self-confidence, and the ability to seize opportunities, leadership, and initiative demonstrated - RATING": 3,
-    "10. Class Management: - RATING": 4,
-    "TEACHING LEARNING and ASSESSMENT": 4,
-    "ACADEMIC ACHIEVEMENT": 4,
-    "PERSONAL DEVELOPMENT AND WELL-BEING": 3,
-    "OVERALL EFFECTIVENESS": 4,
-    "POSITIVE COMMENTS": "1. Well-behaved and self-disciplined students",
-    "AREAS FOR IMPROVEMENT": "1. Teacher's level of preparation to deliver the lesson\n2. Lost opportunities to develop HOTS\n3. Lost opportunities to work together and communicate\n4. Lost opportunities to teach others\n5. Limited use of IWB & technology\n6. Teacher-led approach\n7. Limited authentic assessment as students are not chosen randomly.\n8. Seating supports Pair work, but group work demanded, upon students request, changed to a pair work, the Think-Pair-Share structure not followed that limited the effectiveness."
-  }
-];
-
-let rawData = JSON.parse(JSON.stringify(DEFAULT_DATA));
-
-// ---------- utilities ----------
-function toISODate(s){
-  if(!s) return null;
-  const d = new Date(s);
-  if(!isNaN(d)) return d.toISOString().slice(0,10);
-  const parts = s.split(/[\\/\\-\\s:]+/).filter(Boolean);
-  if(parts.length>=3){
-    if(parts[0].length===4) return parts[0]+'-'+parts[1].padStart(2,'0')+'-'+parts[2].padStart(2,'0');
-    let mm=parts[0], dd=parts[1], yy=parts[2];
-    if(parseInt(mm)>12){ mm=parts[1]; dd=parts[0]; }
-    return yy+'-'+String(mm).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
-  }
-  return null;
-}
-
-function safeParseNum(v){ if(v===undefined||v===null) return NaN; if(typeof v==='number') return v; const n=parseFloat(String(v).trim()); return isNaN(n)?NaN:n; }
-
-// ---------- Field mapping ----------
-const INDICATOR_LABELS = [
-  'Managing conducive learning environment',
-  'Active Learning',
-  'Technology Utilisation',
-  'Effective Assessment',
-  'Differentiation',
-  'Feedback',
-  'Challenge',
-  'Progress',
-  'Student Self-Confidence',
-  'Classroom Management'
-];
-
-const DOMAIN_FIELDS = [
-  'TEACHING LEARNING and ASSESSMENT',
-  'ACADEMIC ACHIEVEMENT',
-  'PERSONAL DEVELOPMENT AND WELL-BEING'
-];
-
-function findKeyLike(sampleKeys, keywords){
-  const low = keywords.map(k=>k.toLowerCase());
-  return sampleKeys.find(k=>{
-    const kk=k.toLowerCase();
-    return low.some(w=> kk.includes(w) );
-  }) || null;
-}
-
-function buildFieldMap(dataset){
-  const sample = dataset.find(Boolean) || {};
-  const sampleKeys = Object.keys(sample);
-  const indicatorMap = {};
-  INDICATOR_LABELS.forEach(lbl=>{
-    // pick first key that matches significant word(s)
-    const words = lbl.split(' ').slice(0,2).map(s=>s.replace(/[^a-zA-Z]/g,''));
-    indicatorMap[lbl] = findKeyLike(sampleKeys, [lbl.toLowerCase(), words.join(' '), words[0]]);
-  });
-  const domainMap = {};
-  DOMAIN_FIELDS.forEach(d=>{
-    domainMap[d] = sampleKeys.find(k=> k.toLowerCase().replace(/\\s+/g,'').includes(d.toLowerCase().replace(/\\s+/g,''))) || null;
-  });
-  const overallKey = sampleKeys.find(k=>k.toLowerCase().replace(/\\s+/g,'').includes('overalleffectiveness')) || 'OVERALL EFFECTIVENESS';
-  return {indicatorMap, domainMap, overallKey};
-}
-
-// ---------- Filters ----------
-function populateFilters(data){
-  const sections=new Set(), grades=new Set(), subjects=new Set(), teachers=new Set();
-  data.forEach(d=>{
-    if(d.Section) sections.add(d.Section);
-    if(d.GRADE) grades.add(d.GRADE);
-    if(d.Subject) subjects.add(d.Subject);
-    if(d["Teacher's Full Name"]) teachers.add(d["Teacher's Full Name"]);
-    if(d['Teacher']) teachers.add(d['Teacher']);
-  });
-  fillSelect('filterSection', Array.from(sections).sort());
-  fillSelect('filterGrade', Array.from(grades).sort());
-  fillSelect('filterSubject', Array.from(subjects).sort());
-  fillSelect('filterTeacher', Array.from(teachers).sort());
-}
-function fillSelect(id, values){
-  const sel=document.getElementById(id);
-  const current = sel.value || '__ALL__';
-  sel.innerHTML = '<option value="__ALL__">All</option>';
-  values.forEach(v=>{ const opt=document.createElement('option'); opt.value=v; opt.textContent=v; sel.appendChild(opt); });
-  sel.value = current && Array.from(sel.options).some(o=>o.value===current) ? current : '__ALL__';
-}
-
-function getFilteredData(){
-  const sec=document.getElementById('filterSection').value;
-  const grade=document.getElementById('filterGrade').value;
-  const subj=document.getElementById('filterSubject').value;
-  const teacher=document.getElementById('filterTeacher').value;
-  const from=document.getElementById('dateFrom').value;
-  const to=document.getElementById('dateTo').value;
-  return rawData.filter(r=>{
-    if(sec!=='__ALL__' && (r.Section||'')!==sec) return false;
-    if(grade!=='__ALL__' && (r.GRADE||'')!==grade) return false;
-    if(subj!=='__ALL__' && (r.Subject||'')!==subj) return false;
-    const tname = r["Teacher's Full Name"] || r.Teacher || r['Your Name'] || '';
-    if(teacher!=='__ALL__' && tname!==teacher) return false;
-    const dt = toISODate(r['Date of Observation']||r.Timestamp);
-    if(from && dt && dt < from) return false;
-    if(to && dt && dt > to) return false;
-    return true;
-  });
-}
-
-// ---------- Counting helpers ----------
-function zeroCounts(){ return {1:0,2:0,3:0,4:0}; }
-function countRatingsForKey(data, key){
-  const counts = zeroCounts();
-  data.forEach(d=>{
-    const v = safeParseNum(d[key]);
-    if(!isNaN(v) && [1,2,3,4].includes(v)) counts[v]++; 
-  });
-  return counts;
-}
-function countsToArray(cnt){ return [cnt[1]||0, cnt[2]||0, cnt[3]||0, cnt[4]||0]; }
-
-// ---------- Drawing ----------
-function drawAll(){
-  const filtered = getFilteredData();
-  const fmap = buildFieldMap(rawData);
-  const overallKey = fmap.overallKey;
-
-  // I) Overall Effectiveness counts
-  const overallCounts = countRatingsForKey(filtered, overallKey);
-  const overallY = countsToArray(overallCounts);
-  const overallTrace = {
-    x: ['OUTSTANDING (1)','GOOD (2)','SATISFACTORY (3)','INADEQUATE (4)'],
-    y: overallY,
-    type: 'bar',
-    marker: {color:['#10b981','#60a5fa','#f59e0b','#ef4444']},
-    text: overallY,
-    textposition: 'outside',
-    textfont: {size:12}
-  };
-  Plotly.react('chartOverall', [overallTrace], {title:'Overall Effectiveness — lesson counts', margin:{t:40}, yaxis:{title:'Count', rangemode:'tozero'}});
-
-  // II) Section-wise overall effectiveness (stacked)
-  const sections = Array.from(new Set((filtered.length?filtered:rawData).map(d=>d.Section||'Unknown'))).sort();
-  const ratingSeries = [1,2,3,4].map(r=>{
-    return {
-      x: sections,
-      y: sections.map(s => {
-        const rows = (filtered.length?filtered:rawData).filter(d=>(d.Section||'Unknown')===s);
-        return rows.reduce((acc,d)=>{
-          const v = safeParseNum(d[overallKey]);
-          return acc + ((v===r)?1:0);
-        },0);
-      }),
-      name: String(r),
-      type: 'bar',
-      textposition: 'auto',
-      text: sections.map(s=>{
-        const rows = (filtered.length?filtered:rawData).filter(d=>(d.Section||'Unknown')===s);
-        return rows.reduce((acc,d)=> acc + ((safeParseNum(d[overallKey])===r)?1:0),0);
-      })
+        alert("Loaded " + rawData.length + " record(s).");
+      } catch (err) {
+        alert("Invalid JSON file.");
+      }
     };
+    reader.readAsText(f);
   });
-  Plotly.react('chartSection', ratingSeries, {barmode:'stack', title:'Section-wise Overall Effectiveness (stacked counts)', margin:{t:40}, xaxis:{title:'Section'}, yaxis:{title:'Count'}});
 
-  // III) Domain-level counts and radar (averages)
-  const domainKeys = DOMAIN_FIELDS.map(d => fmap.domainMap[d] || d);
-  const domainLabels = DOMAIN_FIELDS.slice();
-  // counts grouped
-  const domainCountsSeries = [1,2,3,4].map(r=>{
-    return {
-      x: domainLabels,
-      y: domainKeys.map(k => {
-        const cnt = countRatingsForKey(filtered, k);
-        return cnt[r]||0;
-      }),
-      name: 'Rating ' + r,
-      type: 'bar',
-      textposition: 'outside',
-      text: domainKeys.map(k => countRatingsForKey(filtered, k)[r]||0)
-    };
-  });
-  Plotly.react('chartDomainCounts', domainCountsSeries, {barmode:'group', title:'Domain Rating Distribution (counts)', margin:{t:40}, yaxis:{title:'Count'}});
-
-  // Radar: average per domain (1..4) — if no data, show zeros
-  const domainAvgs = domainKeys.map(k=>{
-    const nums = filtered.map(d => safeParseNum(d[k])).filter(n=>!isNaN(n));
-    return nums.length? (nums.reduce((a,b)=>a+b,0)/nums.length) : 0;
-  });
-  const radar = [{
-    type: 'scatterpolar',
-    r: domainAvgs.concat(domainAvgs[0]||0),
-    theta: domainLabels.concat(domainLabels[0]||''),
-    fill: 'toself',
-    name: 'Avg Rating (lower=better)'
-  }];
-  const radarLayout = { polar:{ radialaxis:{ range:[1,4], tickvals:[1,2,3,4]}}, title:'Domain Average Rating (1=best)', margin:{t:40} };
-  Plotly.react('chartDomainRadar', radar, radarLayout);
-
-  // IV) Key Pedagogical Indicators — grouped stacked: each indicator has counts for 1..4
-  const fmap2 = buildFieldMap(rawData); // mapping based on rawData
-  const presentInd = INDICATOR_LABELS.map(lbl => ({label:lbl, key: fmap2.indicatorMap[lbl]})).filter(x=>x.key);
-  const indLabels = presentInd.map(p=>p.label);
-  const indSeries = [1,2,3,4].map(r=>{
-    return {
-      x: indLabels,
-      y: presentInd.map(ind=>{
-        const cnt = countRatingsForKey(filtered, ind.key);
-        return cnt[r]||0;
-      }),
-      name: String(r),
-      type: 'bar',
-      text: presentInd.map(ind=> countRatingsForKey(filtered, ind.key)[r]||0),
-      textposition: 'inside',
-    };
-  });
-  Plotly.react('chartIndicators', indSeries, {barmode:'stack', title:'Pedagogical Indicators — counts per rating', margin:{t:40, b:140}, yaxis:{title:'Count'}, xaxis:{tickangle:-30}});
-}
-
-// ---------- UI hooks ----------
-document.getElementById('btnApply').addEventListener('click', ()=> drawAll());
-document.getElementById('btnReset').addEventListener('click', ()=>{
-  document.getElementById('filterSection').value='__ALL__';
-  document.getElementById('filterGrade').value='__ALL__';
-  document.getElementById('filterSubject').value='__ALL__';
-  document.getElementById('filterTeacher').value='__ALL__';
-  document.getElementById('dateFrom').value='';
-  document.getElementById('dateTo').value='';
-  drawAll();
-});
-
-// File upload handling
-document.getElementById('fileInput').addEventListener('change', function(e){
-  const f = e.target.files && e.target.files[0];
-  if(!f) return;
-  const reader = new FileReader();
-  reader.onload = function(ev){
-    try{
-      const parsed = JSON.parse(ev.target.result);
-      rawData = Array.isArray(parsed)? parsed : [parsed];
-      populateFilters(rawData);
-      // reset date fields
-      document.getElementById('dateFrom').value=''; document.getElementById('dateTo').value='';
-      drawAll();
-      alert('Loaded '+rawData.length+' record(s).');
-    }catch(err){
-      alert('Invalid JSON: '+err.message);
-    }
-  };
-  reader.readAsText(f);
-});
-
-// init
-// Call this when the page loads
-window.onload = loadDefaultData;
-// populateFilters(rawData);
-// drawAll();
-
+  // ---------- INITIAL LOAD ----------
+  window.onload = loadDefaultData;
 </script>
+
 </body>
 </html>
