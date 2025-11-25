@@ -94,6 +94,29 @@
   </div>
 
 <script>
+
+  // URL of your GitHub-hosted JSON file
+const defaultJsonUrl = "https://raw.githubusercontent.com/<username>/lesson-observation-dashboard/main/lesson_data.json";
+
+async function loadDefaultData() {
+    try {
+        const response = await fetch(defaultJsonUrl);
+        const jsonData = await response.json();
+
+        // Handle case where file contains a single object instead of an array
+        const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+
+        // Load dashboard with the GitHub data
+        processUploadedData(dataArray);
+
+    } catch (error) {
+        console.error("Error loading default JSON:", error);
+    }
+}
+
+// Call this when the page loads
+window.onload = loadDefaultData;
+
 // ---------- SAMPLE DATA ----------
 let DEFAULT_DATA = [
   {
