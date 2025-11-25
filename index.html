@@ -116,8 +116,7 @@ async function loadDefaultData() {
     }
 }
 
-// Call this when the page loads
-window.onload = loadDefaultData;
+
 
 // ---------- SAMPLE DATA ----------
 let DEFAULT_DATA = [
@@ -152,7 +151,7 @@ let DEFAULT_DATA = [
   }
 ];
 
-let rawData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+let rawData = JSON.parse(JSON.stringify(dataArray));
 
 // ---------- utilities ----------
 function toISODate(s){
@@ -402,6 +401,8 @@ document.getElementById('fileInput').addEventListener('change', function(e){
 });
 
 // init
+// Call this when the page loads
+window.onload = loadDefaultData;
 populateFilters(rawData);
 drawAll();
 
